@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const videoPreview = document.getElementById('videoPreview');
   const submitButton = document.getElementById('submitButton');
 
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyoyx8EULFT2r67TwftTrSNXvzOVPXojaIE4Wxem8sACU16NGYNvpmhvCB1M6VHgETaJQ/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx1zietm-GdRCZidEBIzc-ilDHs4DfxpDD5MsyWJBgL_RcV7Wvy2c_iIq_PUEGiUO7yYQ/exec';
   const API_KEY = '12345ABC';
 
   let mediaRecorder;
@@ -34,12 +34,8 @@ document.addEventListener('DOMContentLoaded', function() {
   // IP adresini al
   fetch("https://api64.ipify.org?format=json")
     .then(res => res.json())
-    .then(data => {
-      clientIP = data.ip;
-    })
-    .catch(() => {
-      clientIP = "Bilinmiyor";
-    });
+    .then(data => { clientIP = data.ip; })
+    .catch(() => { clientIP = "Bilinmiyor"; });
 
   // Popup kapat, form göster
   closePopup.addEventListener('click', function() {
@@ -125,7 +121,14 @@ document.addEventListener('DOMContentLoaded', function() {
   recordButton.addEventListener('click', async function() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream);
+
+      // Tarayıcıya göre uygun format seç
+      let options = { mimeType: "audio/webm" }; // varsayılan
+      if (MediaRecorder.isTypeSupported("audio/mp4")) options = { mimeType: "audio/mp4" }; // Safari / iOS
+      else if (MediaRecorder.isTypeSupported("audio/wav")) options = { mimeType: "audio/wav" }; // diğer
+      else if (MediaRecorder.isTypeSupported("audio/3gpp")) options = { mimeType: "audio/3gpp" }; // Android eski
+
+      mediaRecorder = new MediaRecorder(stream, options);
       audioChunks = [];
 
       mediaRecorder.ondataavailable = function(e) {
@@ -133,14 +136,14 @@ document.addEventListener('DOMContentLoaded', function() {
       };
 
       mediaRecorder.onstop = function() {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
         const audioUrl = URL.createObjectURL(audioBlob);
         audioPreview.src = audioUrl;
         audioPreview.style.display = 'block';
 
         const reader = new FileReader();
         reader.onloadend = function() {
-          audioDataInput.value = reader.result;
+          audioDataInput.value = reader.result; // Base64 olarak sakla
         };
         reader.readAsDataURL(audioBlob);
       };
@@ -174,30 +177,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const message = document.getElementById('message').value.trim();
     const audioData = audioDataInput.value;
 
-    if (!name) {
-      showStatus("Lütfen isminizi girin", "error");
-      return;
-    }
-
-    if (activeType === 'text' && !message) {
-      showStatus("Lütfen bir mesaj yazın", "error");
-      return;
-    }
-
-    if (activeType === 'audio' && !audioData) {
-      showStatus("Lütfen bir ses kaydı yapın", "error");
-      return;
-    }
-
-    if (activeType === 'image' && base64Images.length === 0) {
-      showStatus("Lütfen en az bir resim seçin", "error");
-      return;
-    }
-
-    if (activeType === 'video' && base64Videos.length === 0) {
-      showStatus("Lütfen en az bir video seçin", "error");
-      return;
-    }
+    if (!name) { showStatus("Lütfen isminizi girin", "error"); return; }
+    if (activeType === 'text' && !message) { showStatus("Lütfen bir mesaj yazın", "error"); return; }
+    if (activeType === 'audio' && !audioData) { showStatus("Lütfen bir ses kaydı yapın", "error"); return; }
+    if (activeType === 'image' && base64Images.length === 0) { showStatus("Lütfen en az bir resim seçin", "error"); return; }
+    if (activeType === 'video' && base64Videos.length === 0) { showStatus("Lütfen en az bir video seçin", "error"); return; }
 
     const formData = new FormData();
     formData.append('key', API_KEY);
@@ -205,28 +189,18 @@ document.addEventListener('DOMContentLoaded', function() {
     formData.append('type', activeType);
     formData.append('ip', clientIP);
 
-    if (activeType === 'text') {
-      formData.append('message', message);
-    } else if (activeType === 'audio') {
-      formData.append('file', audioData);
-    } else if (activeType === 'image') {
-      formData.append('files', JSON.stringify(base64Images));
-    } else if (activeType === 'video') {
-      formData.append('files', JSON.stringify(base64Videos));
-    }
+    if (activeType === 'text') formData.append('message', message);
+    else if (activeType === 'audio') formData.append('file', audioData);
+    else if (activeType === 'image') formData.append('files', JSON.stringify(base64Images));
+    else if (activeType === 'video') formData.append('files', JSON.stringify(base64Videos));
 
     loader.style.display = 'block';
     submitButton.disabled = true;
     hideStatus();
 
     try {
-      const response = await fetch(SCRIPT_URL, {
-        method: 'POST',
-        body: formData
-      });
-
+      const response = await fetch(SCRIPT_URL, { method: 'POST', body: formData });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
       const result = await response.json();
 
       if (result.success) {
@@ -268,5 +242,4 @@ document.addEventListener('DOMContentLoaded', function() {
     statusMessage.style.display = 'none';
     statusMessage.textContent = '';
   }
-
 });
